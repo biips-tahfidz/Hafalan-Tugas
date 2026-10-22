@@ -4,6 +4,7 @@ import { INITIAL_USERS } from '../data/initialUsers.js';
 const STORAGE_KEY_USERS = 'hafalan_app_users';
 const STORAGE_KEY_CLASSES = 'hafalan_app_teacher_classes';
 const STORAGE_KEY_SUBMISSIONS = 'hafalan_app_submissions';
+const STORAGE_KEY_CLASS_LIST = 'hafalan_app_class_list';
 
 // Helper to load/save localStorage fallback
 function getLocal(key, defaultVal) {
@@ -44,6 +45,11 @@ export function initSeedData() {
       { id: 'tc-3', teacher_id: users.find(u => u.username === 'hanifah')?.id, teacher_username: 'hanifah', kelas: '3', academic_year: '2024/2025' },
     ];
     setLocal(STORAGE_KEY_CLASSES, teacherClasses);
+  }
+
+  let classList = getLocal(STORAGE_KEY_CLASS_LIST, null);
+  if (!classList || classList.length === 0) {
+    setLocal(STORAGE_KEY_CLASS_LIST, ['1', '2', '3']);
   }
   if (!getLocal(STORAGE_KEY_SUBMISSIONS, null)) {
     setLocal(STORAGE_KEY_SUBMISSIONS, []);
@@ -318,5 +324,52 @@ export async function dbDeleteSubmission(subId) {
   let subs = getLocal(STORAGE_KEY_SUBMISSIONS, []);
   subs = subs.filter(s => s.id !== subId);
   setLocal(STORAGE_KEY_SUBMISSIONS, subs);
+  return { success: true };
+}
+
+// --- DYNAMIC CLASS LIST MANAGEMENT ---
+export async function dbGetClasses() {
+  try {
+    const { data, error } = await supabase.from('school_classes').select('name').order('name');
+    if (!error && data && data.length > 0) {
+      return data.map(c => c.name);
+    }
+  } catch (e) {}
+
+  const local = getLocal(STORAGE_KEY_CLASS_LIST, ['1', '2', '3']);
+  if (!local || local.length === 0) {
+    setLocal(STORAGE_KEY_CLASS_LIST, ['1', '2', '3']);
+    return ['1', '2', '3'];
+  }
+  return local;
+}
+
+export async function dbAddClass(className) {
+  const name = String(className).trim();
+  if (!name) return { success: false, message: 'Nama kelas wajib diisi' };
+
+  try {
+    await supabase.from('school_classes').insert([{ name }]);
+  } catch (e) {}
+
+  const classes = getLocal(STORAGE_KEY_CLASS_LIST, ['1', '2', '3']);
+  if (!classes.includes(name)) {
+    classes.push(name);
+    classes.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    setLocal(STORAGE_KEY_CLASS_LIST, classes);
+  }
+  return { success: true };
+}
+
+export async function dbDeleteClass(className) {
+  const name = String(className).trim();
+
+  try {
+    await supabase.from('school_classes').delete().eq('name', name);
+  } catch (e) {}
+
+  let classes = getLocal(STORAGE_KEY_CLASS_LIST, ['1', '2', '3']);
+  classes = classes.filter(c => c !== name);
+  setLocal(STORAGE_KEY_CLASS_LIST, classes);
   return { success: true };
 }

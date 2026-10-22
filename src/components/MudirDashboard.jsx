@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Users, UserPlus, Trash2, Edit2, BookOpen, Award, CheckCircle2, Clock, Filter, Plus, UserCheck } from 'lucide-react';
-import { dbGetUsers, dbAddUser, dbDeleteUser, dbGetTeacherClasses, dbAssignTeacherClass, dbRemoveTeacherClass, dbGetSubmissions, dbGradeSubmission } from '../services/db';
+import { ShieldCheck, Users, UserPlus, Trash2, Edit2, BookOpen, Award, CheckCircle2, Clock, Filter, Plus, UserCheck, Building2 } from 'lucide-react';
+import { dbGetUsers, dbAddUser, dbDeleteUser, dbGetTeacherClasses, dbAssignTeacherClass, dbRemoveTeacherClass, dbGetSubmissions, dbGradeSubmission, dbGetClasses, dbAddClass, dbDeleteClass } from '../services/db';
 import FilePreview from './FilePreview';
 import SantriDashboard from './SantriDashboard';
 
 export default function MudirDashboard({ currentUser }) {
-  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'teachers' | 'grading' | 'as_santri'
+  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'teachers' | 'classes' | 'grading' | 'as_santri'
 
   const [users, setUsers] = useState([]);
+  const [classList, setClassList] = useState([]);
   const [teacherClasses, setTeacherClasses] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Class Management State
+  const [newClassName, setNewClassName] = useState('');
+  const [classError, setClassError] = useState('');
 
   // Filters
   const [roleFilter, setRoleFilter] = useState('ALL');
@@ -45,6 +50,9 @@ export default function MudirDashboard({ currentUser }) {
 
     const subList = await dbGetSubmissions();
     setSubmissions(subList);
+
+    const classes = await dbGetClasses();
+    setClassList(classes);
 
     setLoading(false);
   };
@@ -98,6 +106,25 @@ export default function MudirDashboard({ currentUser }) {
     }
     if (window.confirm(`Yakin ingin menghapus akun ${u.username} (${u.role})?`)) {
       await dbDeleteUser(u.id);
+      fetchData();
+    }
+  };
+
+  const handleAddClass = async (e) => {
+    e.preventDefault();
+    if (!newClassName.trim()) {
+      setClassError('Nama kelas tidak boleh kosong');
+      return;
+    }
+    await dbAddClass(newClassName);
+    setNewClassName('');
+    setClassError('');
+    fetchData();
+  };
+
+  const handleDeleteClass = async (className) => {
+    if (window.confirm(`Yakin ingin menghapus Kelas ${className}?`)) {
+      await dbDeleteClass(className);
       fetchData();
     }
   };
@@ -159,19 +186,19 @@ export default function MudirDashboard({ currentUser }) {
               <ShieldCheck className="w-3 h-3" /> Kepala Sekolah / Mudir
             </span>
             <h2 className="text-lg font-bold mt-1">Assalamu'alaikum, Ustadz {currentUser.username}!</h2>
-            <p className="text-xs text-purple-200 mt-0.5">Manajemen User, Pengampu Kelas, & Penilaian Seluruh Sekolah.</p>
+            <p className="text-xs text-purple-200 mt-0.5">Manajemen User, Pengampu & Edit Kelas Sekolah.</p>
           </div>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex bg-purple-950/60 p-1 rounded-xl mt-4 text-[11px] font-semibold">
+        <div className="flex bg-purple-950/60 p-1 rounded-xl mt-4 text-[10px] font-semibold">
           <button
             onClick={() => setActiveTab('users')}
             className={`flex-1 py-2 rounded-lg text-center transition-all cursor-pointer ${
               activeTab === 'users' ? 'bg-white text-purple-900 shadow-xs font-bold' : 'text-purple-200 hover:text-white'
             }`}
           >
-            Pengguna ({users.length})
+            Pengguna
           </button>
           <button
             onClick={() => setActiveTab('teachers')}
@@ -179,7 +206,15 @@ export default function MudirDashboard({ currentUser }) {
               activeTab === 'teachers' ? 'bg-white text-purple-900 shadow-xs font-bold' : 'text-purple-200 hover:text-white'
             }`}
           >
-            Pengampu Kelas
+            Pengampu
+          </button>
+          <button
+            onClick={() => setActiveTab('classes')}
+            className={`flex-1 py-2 rounded-lg text-center transition-all cursor-pointer ${
+              activeTab === 'classes' ? 'bg-white text-purple-900 shadow-xs font-bold' : 'text-purple-200 hover:text-white'
+            }`}
+          >
+            Edit Kelas
           </button>
           <button
             onClick={() => setActiveTab('grading')}
@@ -187,7 +222,7 @@ export default function MudirDashboard({ currentUser }) {
               activeTab === 'grading' ? 'bg-white text-purple-900 shadow-xs font-bold' : 'text-purple-200 hover:text-white'
             }`}
           >
-            Penilaian Tugas ({submissions.length})
+            Penilaian
           </button>
           <button
             onClick={() => setActiveTab('as_santri')}
@@ -285,7 +320,7 @@ export default function MudirDashboard({ currentUser }) {
               className="px-3 py-1.5 bg-purple-900 hover:bg-purple-800 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Tambah Pengampu Kelas</span>
+              <span>Tambah Pengampu</span>
             </button>
           </div>
 
@@ -337,7 +372,67 @@ export default function MudirDashboard({ currentUser }) {
         </div>
       )}
 
-      {/* TAB 3: PENILAIAN SELURUH KELAS */}
+      {/* TAB 3: MANAJEMEN / EDIT KELAS */}
+      {activeTab === 'classes' && (
+        <div className="space-y-3">
+          {/* Form Tambah Kelas */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <Building2 className="w-4 h-4 text-purple-700" />
+              <span>Tambah Kelas Baru</span>
+            </h3>
+
+            {classError && (
+              <p className="text-xs text-red-600 bg-red-50 p-2 rounded-lg">{classError}</p>
+            )}
+
+            <form onSubmit={handleAddClass} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Misal: 4, 1B, atau Takhasus"
+                value={newClassName}
+                onChange={(e) => setNewClassName(e.target.value)}
+                className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                required
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-purple-900 hover:bg-purple-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Tambah</span>
+              </button>
+            </form>
+          </div>
+
+          {/* List Kelas Registered */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-2">
+            <h3 className="text-xs font-bold text-slate-800 border-b border-slate-100 pb-2">
+              Daftar Kelas Terdaftar ({classList.length})
+            </h3>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              {classList.map((c) => (
+                <div
+                  key={c}
+                  className="p-3 bg-purple-50/60 border border-purple-100 rounded-xl flex items-center justify-between text-xs"
+                >
+                  <span className="font-bold text-purple-900">Kelas {c}</span>
+                  <button
+                    onClick={() => handleDeleteClass(c)}
+                    title="Hapus Kelas"
+                    className="p-1 text-red-500 hover:bg-red-100 rounded-lg cursor-pointer transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: PENILAIAN SELURUH KELAS */}
       {activeTab === 'grading' && (
         <div className="space-y-3">
           <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
@@ -351,9 +446,9 @@ export default function MudirDashboard({ currentUser }) {
               className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-slate-800 focus:outline-none"
             >
               <option value="ALL">Seluruh Kelas</option>
-              <option value="1">Kelas 1</option>
-              <option value="2">Kelas 2</option>
-              <option value="3">Kelas 3</option>
+              {classList.map(c => (
+                <option key={c} value={c}>Kelas {c}</option>
+              ))}
             </select>
           </div>
 
@@ -418,7 +513,7 @@ export default function MudirDashboard({ currentUser }) {
         </div>
       )}
 
-      {/* TAB 4: SETORAN SAYA (MUDIR AS SANTRI) */}
+      {/* TAB 5: SETORAN SAYA (MUDIR AS SANTRI) */}
       {activeTab === 'as_santri' && (
         <SantriDashboard currentUser={currentUser} />
       )}
@@ -481,9 +576,9 @@ export default function MudirDashboard({ currentUser }) {
                     onChange={(e) => setNewKelas(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
                   >
-                    <option value="1">Kelas 1</option>
-                    <option value="2">Kelas 2</option>
-                    <option value="3">Kelas 3</option>
+                    {classList.map(c => (
+                      <option key={c} value={c}>Kelas {c}</option>
+                    ))}
                   </select>
                 </div>
               )}
@@ -537,9 +632,9 @@ export default function MudirDashboard({ currentUser }) {
                   onChange={(e) => setAssignClass(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                 >
-                  <option value="1">Kelas 1</option>
-                  <option value="2">Kelas 2</option>
-                  <option value="3">Kelas 3</option>
+                  {classList.map(c => (
+                    <option key={c} value={c}>Kelas {c}</option>
+                  ))}
                 </select>
               </div>
 
